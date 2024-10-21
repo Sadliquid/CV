@@ -149,7 +149,27 @@ def get_recyclable_categories(detected_objects):
             matching_categories.add(category)
     return list(matching_categories) if matching_categories else None
 
-def confirm_category_with_label_detection(image_path, initial_categories):
+def get_best_fitting_category(image_path, detected_objects, matched_categories):
+    # Count matching items in each category
+    category_match_count = {category: 0 for category in matched_categories}
+    for category in matched_categories:
+        terms = category_map.get(category, [])
+        category_match_count[category] = sum(1 for obj in detected_objects if obj in terms)
+
+    # Find the category with the highest match count
+    best_category = max(category_match_count, key=category_match_count.get)
+    highest_count = category_match_count[best_category]
+
+    # Check for ties
+    tied_categories = [cat for cat, count in category_match_count.items() if count == highest_count]
+
+    if len(tied_categories) > 1:
+        # Perform a more granular analysis using the Vision API
+        return granular_analysis_to_resolve_tie(image_path, tied_categories)
+
+    return best_category
+
+def granular_analysis_to_resolve_tie(image_path, tied_categories):
     client = vision.ImageAnnotatorClient()
 
     try:
@@ -163,13 +183,15 @@ def confirm_category_with_label_detection(image_path, initial_categories):
         if response.error.message:
             raise Exception(f'Error: {response.error.message}')
 
-        label_matches = {category: 0 for category in initial_categories}
-        for category in initial_categories:
+        # Count label matches for each tied category
+        label_match_count = {category: 0 for category in tied_categories}
+        for category in tied_categories:
             terms = category_map.get(category, [])
-            label_matches[category] = sum(1 for label in labels if label in terms)
+            label_match_count[category] = sum(1 for label in labels if label in terms)
 
-        confirmed_category = max(label_matches, key=label_matches.get) if label_matches else None
-        return confirmed_category if label_matches[confirmed_category] > 0 else None
+        # Return the category with the highest label match count
+        best_category = max(label_match_count, key=label_match_count.get)
+        return best_category if label_match_count[best_category] > 0 else None
 
     except Exception as e:
         return {'error': str(e)}
@@ -205,15 +227,11 @@ def upload_image():
     recyclable_categories = get_recyclable_categories(detected_objects)
 
     if recyclable_categories:
-        # Execute label detection to confirm category if multiple categories are detected
-        if len(recyclable_categories) > 1:
-            confirmed_category = confirm_category_with_label_detection(file_path, recyclable_categories)
-            if confirmed_category:
-                return jsonify({'result': 'Yes', 'category': confirmed_category, "items": detected_objects}), 200
+        best_category = get_best_fitting_category(file_path, detected_objects, recyclable_categories)
+        if best_category:
+            return jsonify({'result': 'Yes', 'category': best_category, "items": detected_objects}), 200
 
-        return jsonify({'result': 'Yes', 'category': recyclable_categories, "items": detected_objects}), 200
-    else:
-        return jsonify({'result': 'No', 'category': "No match", "items": detected_objects}), 200
+    return jsonify({'result': 'No', 'category': "No match", "items": detected_objects}), 200
 
 if __name__ == '__main__':
     app.run(debug=True)
