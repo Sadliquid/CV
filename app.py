@@ -1,4 +1,4 @@
-import os
+import os, tempfile
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from google.cloud import vision
@@ -167,7 +167,7 @@ def upload_image():
         return jsonify({'error': 'No file uploaded'}), 400
 
     file = request.files['file']
-    file_path = f'/tmp/{file.filename}'
+    _, file_path = tempfile.mkstemp()
     file.save(file_path)
 
     analysis_result = analyze_image(file_path)
