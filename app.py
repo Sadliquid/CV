@@ -154,6 +154,31 @@ def get_recyclable_categories(detected_objects):
             matching_categories.add(category)
     return list(matching_categories) if matching_categories else None
 
+def confirm_category_with_label_detection(image_path, initial_categories):
+    client = vision.ImageAnnotatorClient()
+
+    try:
+        with open(image_path, 'rb') as image_file:
+            content = image_file.read()
+        image = vision.Image(content=content)
+
+        response = client.label_detection(image=image)
+        labels = [label.description for label in response.label_annotations]
+
+        if response.error.message:
+            raise Exception(f'Error: {response.error.message}')
+
+        label_matches = {category: 0 for category in initial_categories}
+        for category in initial_categories:
+            terms = category_map.get(category, [])
+            label_matches[category] = sum(1 for label in labels if label in terms)
+
+        confirmed_category = max(label_matches, key=label_matches.get) if label_matches else None
+        return confirmed_category if label_matches[confirmed_category] > 0 else None
+
+    except Exception as e:
+        return {'error': str(e)}
+
 @app.route('/', methods=['GET'])
 def getIndex():
     return render_template('index.html')
@@ -175,7 +200,7 @@ def upload_image():
     analysis_result = analyze_image(file_path)
 
     if isinstance(analysis_result, dict) and 'error' in analysis_result:
-        return jsonify({'error': 'Bad image data or processing error', 'details': analysis_result['error']}), 400
+        return jsonify({'error': analysis_result['error']}), 400
 
     detected_objects = analysis_result
 
@@ -185,6 +210,12 @@ def upload_image():
     recyclable_categories = get_recyclable_categories(detected_objects)
 
     if recyclable_categories:
+        # Execute label detection to confirm category if multiple categories are detected
+        if len(recyclable_categories) > 1:
+            confirmed_category = confirm_category_with_label_detection(file_path, recyclable_categories)
+            if confirmed_category:
+                return jsonify({'result': 'Yes', 'category': confirmed_category, "items": detected_objects}), 200
+
         return jsonify({'result': 'Yes', 'category': recyclable_categories, "items": detected_objects}), 200
     else:
         return jsonify({'result': 'No', 'category': "No match", "items": detected_objects}), 200
