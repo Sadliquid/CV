@@ -11,24 +11,28 @@ CORS(app)
 def analyze_image(image_path):
     client = vision.ImageAnnotatorClient()
 
-    with open(image_path, 'rb') as image_file:
-        content = image_file.read()
-    image = vision.Image(content=content)
+    try:
+        with open(image_path, 'rb') as image_file:
+            content = image_file.read()
+        image = vision.Image(content=content)
 
-    response = client.object_localization(image=image)
-    objects = response.localized_object_annotations
+        response = client.object_localization(image=image)
+        objects = response.localized_object_annotations
 
-    detected_objects = [obj.name for obj in objects]
+        if response.error.message:
+            raise Exception(f'Error: {response.error.message}')
 
-    if response.error.message:
-        raise Exception(f'Error: {response.error.message}')
+        detected_objects = [obj.name for obj in objects]
+        return detected_objects
 
-    return detected_objects
+    except Exception as e:
+        return {'error': str(e)}
 
 # Training data
 category_map = {
     'Paper': [
-        'Paper', 
+        'Paper',
+        'Bag',
         'Newspaper', 
         'Magazine', 
         'Notebook', 
@@ -40,13 +44,17 @@ category_map = {
         'Book',
         'Cardboard',
         "2D barcode",
-        "Boxed packaged goods"
+        "Boxed packaged goods",
+        "Bottled and jarred packaged goods"
     ],
     'Plastic': [
-        'Plastic', 
+        'Plastic',
+        'Plastic box',
         'Plastic bottle', 
         'Bottle', 
         'Plastic container', 
+        'Container',
+        'Packaged goods',
         'Plastic cup', 
         'Plastic bag', 
         'Plastic wrap', 
@@ -56,13 +64,15 @@ category_map = {
         'Plastic cutlery', 
         'Plastic straws', 
         'Plastic trays', 
-        'Bubble wrap'
+        'Bubble wrap',
+        "Spoon",
+        "Fork",
+        "Tableware",
     ],
     'Cardboard': [
         'Cardboard', 
         'Carton', 
         'Corrugated cardboard', 
-        'Box', 
         'Cereal box', 
         'Pizza box (clean)', 
         'Shipping box', 
@@ -86,6 +96,8 @@ category_map = {
         'Plywood'
     ],
     'Textile': [
+        'Top',
+        'Towel',
         'Textile', 
         'Cloth', 
         'Fabric', 
@@ -121,6 +133,8 @@ category_map = {
         'Screws', 
         'Nuts',
         'Bolts',
+        "Canned packaged goods",
+
     ]
 }
 
@@ -140,19 +154,24 @@ def postIndex():
 
 @app.route('/upload', methods=['POST'])
 def upload_image():
-    if 'file' not in request.files:
+    if 'file' not in request.files or request.files['file'].filename == '':
         return jsonify({'error': 'No file uploaded'}), 400
 
     file = request.files['file']
     file_path = f'/tmp/{file.filename}'
     file.save(file_path)
 
-    detected_objects = analyze_image(file_path) # Get the detected objects in the image using Vision API
+    analysis_result = analyze_image(file_path)
 
-    if detected_objects == []:
+    if isinstance(analysis_result, dict) and 'error' in analysis_result:
+        return jsonify({'error': 'Bad image data or processing error', 'details': analysis_result['error']}), 400
+
+    detected_objects = analysis_result
+
+    if not detected_objects:
         return jsonify({'result': 'No', 'category': "No match", "items": []}), 200
 
-    recyclable_category = get_recyclable_category(detected_objects) # Simplify the dectected objects to a common category
+    recyclable_category = get_recyclable_category(detected_objects)
 
     if recyclable_category:
         return jsonify({'result': 'Yes', 'category': recyclable_category, "items": detected_objects}), 200
