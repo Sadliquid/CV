@@ -147,11 +147,12 @@ category_map = {
     ]
 }
 
-def get_recyclable_category(detected_objects):
+def get_recyclable_categories(detected_objects):
+    matching_categories = set()
     for category, terms in category_map.items():
         if any(obj in terms for obj in detected_objects):
-            return category
-    return None
+            matching_categories.add(category)
+    return list(matching_categories) if matching_categories else None
 
 @app.route('/', methods=['GET'])
 def getIndex():
@@ -167,8 +168,9 @@ def upload_image():
         return jsonify({'error': 'No file uploaded'}), 400
 
     file = request.files['file']
-    _, file_path = tempfile.mkstemp()
-    file.save(file_path)
+    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+        file.save(temp_file.name)
+        file_path = temp_file.name
 
     analysis_result = analyze_image(file_path)
 
@@ -180,10 +182,10 @@ def upload_image():
     if not detected_objects:
         return jsonify({'result': 'No', 'category': "No match", "items": []}), 200
 
-    recyclable_category = get_recyclable_category(detected_objects)
+    recyclable_categories = get_recyclable_categories(detected_objects)
 
-    if recyclable_category:
-        return jsonify({'result': 'Yes', 'category': recyclable_category, "items": detected_objects}), 200
+    if recyclable_categories:
+        return jsonify({'result': 'Yes', 'category': recyclable_categories, "items": detected_objects}), 200
     else:
         return jsonify({'result': 'No', 'category': "No match", "items": detected_objects}), 200
 
