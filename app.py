@@ -43,8 +43,8 @@ category_map = {
         'Paper towel', 
         'Book',
         'Cardboard',
-        "2D barcode",
         "Boxed packaged goods",
+        "Bagged packaged goods",
         "Bottled and jarred packaged goods"
     ],
     'Plastic': [
@@ -68,6 +68,12 @@ category_map = {
         "Spoon",
         "Fork",
         "Tableware",
+        'Drink',
+        'Juice',
+        'Soda',
+        'Water',
+        'Beverage',
+        "Bottled and jarred packaged goods"
     ],
     'Cardboard': [
         'Cardboard', 
@@ -116,7 +122,18 @@ category_map = {
         'Hats', 
         'Scarves', 
         'Bedding', 
-        'Jackets'
+        'Jackets',
+        "Shorts",
+        'Outerwear',
+        'Hat'
+        'Scarf',
+        'Sweaters',
+        'Shirts',
+        'Pants',
+        'Dresses',
+        'Skirts',
+        'Sleepwear',
+        'Sportswear'
     ],
     'Metal': [
         'Metal', 
@@ -133,8 +150,7 @@ category_map = {
         'Screws', 
         'Nuts',
         'Bolts',
-        "Canned packaged goods",
-
+        "Canned packaged goods"
     ]
 }
 
