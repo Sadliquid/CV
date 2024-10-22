@@ -38,7 +38,7 @@ def get_recyclable_categories(detected_objects):
             matching_categories.add(category)
     return list(matching_categories) if matching_categories else None
 
-def get_best_fitting_category(image_path, detected_objects, matched_categories):
+def get_best_fitting_category(file_name, image_path, detected_objects, matched_categories):
     # Count matching items in each category
     category_match_count = {category: 0 for category in matched_categories}
     for category in matched_categories:
@@ -54,11 +54,11 @@ def get_best_fitting_category(image_path, detected_objects, matched_categories):
 
     if len(tied_categories) > 1:
         # Perform a more granular analysis using the Vision API
-        return granular_analysis_to_resolve_tie(image_path, tied_categories)
+        return granular_analysis_to_resolve_tie(file_name, image_path, tied_categories)
 
     return best_category
 
-def granular_analysis_to_resolve_tie(image_path, tied_categories):
+def granular_analysis_to_resolve_tie(file_name, image_path, tied_categories):
     client = vision.ImageAnnotatorClient()
 
     try:
@@ -72,11 +72,21 @@ def granular_analysis_to_resolve_tie(image_path, tied_categories):
         if response.error.message:
             raise Exception(f'Error: {response.error.message}')
 
-        # Count label matches for each tied category
+        # Count label matches for each tied category, with weighted terms for Paper
         label_match_count = {category: 0 for category in tied_categories}
         for category in tied_categories:
             terms = category_map.get(category, [])
             label_match_count[category] = sum(1 for label in labels if label in terms)
+
+            # Add weights for certain labels indicative of Paper
+            if "Natural material" in labels or "Brown" in labels:
+                if category == "Paper":
+                    label_match_count[category] += 1  # Increase weight for Paper
+
+        with open("logs.txt", "a") as f:
+            f.write(f"Detected labels for {file_name}: {{ {', '.join(f'\"{label}\"' for label in labels)} }}\n")
+            f.write(f"Label match count for {file_name}: {label_match_count}\n")
+            f.write("\n")
 
         # Return the category with the highest label match count
         best_category = max(label_match_count, key=label_match_count.get)
@@ -102,6 +112,7 @@ def upload_image():
     with tempfile.NamedTemporaryFile(delete=False) as temp_file:
         file.save(temp_file.name)
         file_path = temp_file.name
+        file_name = file.filename
 
     analysis_result = analyze_image(file_path)
 
@@ -116,7 +127,7 @@ def upload_image():
     recyclable_categories = get_recyclable_categories(detected_objects)
 
     if recyclable_categories:
-        best_category = get_best_fitting_category(file_path, detected_objects, recyclable_categories)
+        best_category = get_best_fitting_category(file_name, file_path, detected_objects, recyclable_categories)
         if best_category:
             return jsonify({'result': 'Yes', 'category': best_category, "items": detected_objects}), 200
 
