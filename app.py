@@ -11,6 +11,9 @@ CORS(app)
 with open('category_map.json', 'r') as f:
     category_map = json.load(f)
 
+with open('secondary_map.json', 'r') as f:
+    secondary_map = json.load(f)
+
 def analyze_image(image_path):
     client = vision.ImageAnnotatorClient()
 
@@ -83,6 +86,25 @@ def granular_analysis_to_resolve_tie(file_name, image_path, tied_categories):
 
     except Exception as e:
         return {'error': str(e)}
+    
+def fetch_labels(image_path):
+    client = vision.ImageAnnotatorClient()
+
+    try:
+        with open(image_path, "rb") as image_file:
+            content = image_file.read()
+        image = vision.Image(content=content)
+
+        response = client.label_detection(image=image)
+        labels = [label.description for label in response.label_annotations]
+
+        if response.error.message:
+            raise Exception(f'Error: {response.error.message}')
+
+        return labels
+
+    except Exception as e:
+        return {'error': str(e)}
 
 @app.route('/', methods=['GET'])
 def getIndex():
@@ -91,6 +113,21 @@ def getIndex():
 @app.route("/", methods=['POST'])
 def postIndex():
     return '[POST] - API is ONLINE.'
+
+@app.route('/analyze', methods=['POST'])
+def analyze_image():
+    if 'file' not in request.files or request.files['file'].filename == '':
+        return jsonify({'error': 'No file uploaded'}), 400
+
+    file = request.files['file']
+    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+        file.save(temp_file.name)
+        file_path = temp_file.name
+        file_name = file.filename
+
+    labels = fetch_labels(file_path)
+
+    return jsonify({'labels': labels}), 200
 
 @app.route('/upload', methods=['POST'])
 def upload_image():
