@@ -39,21 +39,17 @@ def get_recyclable_categories(detected_objects):
     return list(matching_categories) if matching_categories else None
 
 def get_best_fitting_category(file_name, image_path, detected_objects, matched_categories):
-    # Count matching items in each category
     category_match_count = {category: 0 for category in matched_categories}
     for category in matched_categories:
         terms = category_map.get(category, [])
         category_match_count[category] = sum(1 for obj in detected_objects if obj in terms)
 
-    # Find the category with the highest match count
     best_category = max(category_match_count, key=category_match_count.get)
     highest_count = category_match_count[best_category]
 
-    # Check for ties
     tied_categories = [cat for cat, count in category_match_count.items() if count == highest_count]
 
     if len(tied_categories) > 1:
-        # Perform a more granular analysis using the Vision API
         return granular_analysis_to_resolve_tie(file_name, image_path, tied_categories)
 
     return best_category
@@ -72,23 +68,16 @@ def granular_analysis_to_resolve_tie(file_name, image_path, tied_categories):
         if response.error.message:
             raise Exception(f'Error: {response.error.message}')
 
-        # Count label matches for each tied category, with weighted terms for Paper
         label_match_count = {category: 0 for category in tied_categories}
         for category in tied_categories:
             terms = category_map.get(category, [])
             label_match_count[category] = sum(1 for label in labels if label in terms)
-
-            # Add weights for certain labels indicative of Paper
-            if "Natural material" in labels or "Brown" in labels:
-                if category == "Paper":
-                    label_match_count[category] += 1  # Increase weight for Paper
 
         with open("logs.txt", "a") as f:
             f.write(f"Detected labels for {file_name}: {{ {', '.join(f'\"{label}\"' for label in labels)} }}\n")
             f.write(f"Label match count for {file_name}: {label_match_count}\n")
             f.write("\n")
 
-        # Return the category with the highest label match count
         best_category = max(label_match_count, key=label_match_count.get)
         return best_category if label_match_count[best_category] > 0 else None
 
