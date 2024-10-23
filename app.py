@@ -127,6 +127,18 @@ def analyze_image():
 
     labels = fetch_labels(file_path)
 
+    new_labels = []
+
+    for label in labels:
+        found = any(label in values for values in category_map.values())
+        if not found:
+            new_labels.append(label)
+
+    if new_labels:
+        with open("labels.txt", "a") as f:
+            f.write(f"New labels for {file_name}: {{ {', '.join(f'\"{label}\"' for label in new_labels)} }}\n")
+            f.write("\n")
+
     return jsonify({'labels': labels}), 200
 
 @app.route('/upload', methods=['POST'])
