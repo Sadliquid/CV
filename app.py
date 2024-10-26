@@ -14,7 +14,7 @@ with open('category_map.json', 'r') as f:
 with open('secondary_map.json', 'r') as f:
     secondary_map = json.load(f)
 
-def analyze_image(image_path):
+def get_detected_objects(image_path):
     client = vision.ImageAnnotatorClient()
 
     try:
@@ -115,7 +115,7 @@ def postIndex():
     return '[POST] - API is ONLINE.'
 
 @app.route('/analyze', methods=['POST'])
-def analyze_image():
+def get_labels():
     if 'file' not in request.files or request.files['file'].filename == '':
         return jsonify({'error': 'No file uploaded'}), 400
 
@@ -152,7 +152,7 @@ def upload_image():
         file_path = temp_file.name
         file_name = file.filename
 
-    analysis_result = analyze_image(file_path)
+    analysis_result = get_detected_objects(file_path)
 
     if isinstance(analysis_result, dict) and 'error' in analysis_result:
         return jsonify({'error': analysis_result['error']}), 400
