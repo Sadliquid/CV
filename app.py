@@ -3,6 +3,7 @@ from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from google.cloud import vision
 from PIL import Image
+from collections import OrderedDict
 
 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'serviceAccountKey.json'
 
@@ -122,32 +123,62 @@ def getIndex():
 def postIndex():
     return '[POST] - API is ONLINE.'
 
-@app.route('/analyze', methods=['POST'])
+@app.route('/getLabels', methods=['POST'])
 def get_labels():
-    if 'file' not in request.files or request.files['file'].filename == '':
-        return jsonify({'error': 'No file uploaded'}), 400
+    if 'files' not in request.files or len(request.files.getlist('files')) == 0:
+        return jsonify({'error': 'No files uploaded'}), 400
 
-    file = request.files['file']
-    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-        file.save(temp_file.name)
-        file_path = temp_file.name
-        file_name = file.filename
+    all_labels = []
+    new_labels_list = []
 
-    labels = fetch_labels(file_path)
+    files = request.files.getlist('files')
 
-    new_labels = []
+    total_files = len(files)
+    successfull_files = 0
+    error_files = []
+    
+    for file in files:
+        if file.filename == '':
+            continue  # Skip empty filenames
 
-    for label in labels:
-        found = any(label in values for values in category_map.values())
-        if not found:
-            new_labels.append(label)
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            file.save(temp_file.name)
+            file_path = temp_file.name
+            file_name = file.filename
 
-    if new_labels:
-        with open("labels.txt", "a") as f:
-            f.write(f"New labels for {file_name}: {{ {', '.join(f'\"{label}\"' for label in new_labels)} }}\n")
-            f.write("\n")
+        labels = fetch_labels(file_path)
 
-    return jsonify({'labels': labels}), 200
+        # Skip the label if it's "error"
+        if "error" in labels:
+            error_files.append(file_name)
+            continue
+
+        new_labels = []
+
+        for label in labels:
+            found = any(label in values for values in category_map.values())
+            if not found:
+                new_labels.append(label)
+
+        all_labels.append(labels)
+        successfull_files += 1
+
+        if new_labels:
+            new_labels_list.append((file_name, new_labels))
+
+    # Append all labels to the text file with a line of spacing between entries
+    with open("labels.txt", "a") as f:
+        for file_name, new_labels in new_labels_list:
+            f.write(f"New labels for {file_name}: {{ {', '.join(f'\"{label}\"' for label in new_labels)} }}\n\n")
+
+    response_data = OrderedDict([
+        ('Received images', total_files),
+        ('Successfull scans', successfull_files),
+        ('Error scans', error_files),
+        ('Corrupted files', len(error_files)),
+    ])
+
+    return jsonify(response_data), 200
 
 @app.route('/upload', methods=['POST'])
 def upload_image():
