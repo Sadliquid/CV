@@ -2,6 +2,7 @@ import os, tempfile, json
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from google.cloud import vision
+from PIL import Image
 
 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'serviceAccountKey.json'
 
@@ -13,6 +14,13 @@ with open('category_map.json', 'r') as f:
 
 with open('secondary_map.json', 'r') as f:
     secondary_map = json.load(f)
+
+def optimize_image(image_path, max_size=(800, 800)):
+    with Image.open(image_path) as img:
+        img.thumbnail(max_size)
+        jpeg_path = image_path + ".jpg"
+        img.convert("RGB").save(jpeg_path, "JPEG", optimize=True, quality=85)
+    return jpeg_path
 
 def get_detected_objects(image_path):
     client = vision.ImageAnnotatorClient()
@@ -152,7 +160,9 @@ def upload_image():
         file_path = temp_file.name
         file_name = file.filename
 
-    analysis_result = get_detected_objects(file_path)
+    optimized_image_path = optimize_image(file_path)
+
+    analysis_result = get_detected_objects(optimized_image_path)
 
     if isinstance(analysis_result, dict) and 'error' in analysis_result:
         return jsonify({'error': analysis_result['error']}), 400
